@@ -2576,7 +2576,7 @@ static struct vm_struct *__get_vm_area_node(unsigned long size,
 	struct vm_struct *area;
 	unsigned long requested_size = size;
 
-	BUG_ON(in_interrupt());
+	// BUG_ON(in_interrupt());
 	size = ALIGN(size, 1ul << shift);
 	if (unlikely(!size))
 		return NULL;

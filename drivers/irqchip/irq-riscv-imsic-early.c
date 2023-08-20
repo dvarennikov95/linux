@@ -129,6 +129,19 @@ static int __init imsic_ipi_domain_init(void)
 }
 #endif
 
+#define SCU_IRQA_STATUS       (0)
+#define SCU_IRQA_SW_TRG       (0x64)
+
+#define SCU_APB_BASE_ADDRESS 0x8DFF80000000UL
+#define SCU_IRQA_BASE (SCU_APB_BASE_ADDRESS + 0x2400000)
+
+#define TARGETS_PER_INTERRUPT 4
+#define SCU_IRQ_REG_SIZE   4 /* in Bytes */
+#define SCU_IRQ_REG_OFFSET (SCU_IRQ_REG_SIZE * TARGETS_PER_INTERRUPT)
+
+#define SCU_IRQA_REG(reg, offset16, ofset4)                                                        \
+    (SCU_IRQA_BASE + reg + offset16 * SCU_IRQ_REG_OFFSET + ofset4 * SCU_IRQ_REG_SIZE)
+
 /*
  * To handle an interrupt, we read the TOPEI CSR and write zero in one
  * instruction. If TOPEI CSR is non-zero then we translate TOPEI.ID to
@@ -144,6 +157,11 @@ static void imsic_handle_irq(struct irq_desc *desc)
 
 	while ((hwirq = csr_swap(CSR_TOPEI, 0))) {
 		hwirq = hwirq >> TOPEI_ID_SHIFT;
+
+		void __iomem *regs = ioremap(SCU_IRQA_REG(SCU_IRQA_SW_TRG, 0, 0), 4);
+		writel(0, regs);
+		regs = ioremap(SCU_IRQA_REG(SCU_IRQA_STATUS, 0, 0), 4);
+    	writel(0xFFFFFFFF, regs);
 
 		if (hwirq == imsic->ipi_id) {
 #ifdef CONFIG_SMP
