@@ -165,12 +165,12 @@ static int __init riscv_timer_init_common(void)
 		static_branch_enable(&riscv_sstc_available);
 	}
 
-	// error = cpuhp_setup_state(CPUHP_AP_RISCV_TIMER_STARTING,
-	// 		 "clockevents/riscv/timer:starting",
-	// 		 riscv_timer_starting_cpu, riscv_timer_dying_cpu);
-	// if (error)
-	// 	pr_err("cpu hp setup state failed for RISCV timer [%d]\n",
-	// 	       error);
+	error = cpuhp_setup_state(CPUHP_AP_RISCV_TIMER_STARTING,
+			 "clockevents/riscv/timer:starting",
+			 riscv_timer_starting_cpu, riscv_timer_dying_cpu);
+	if (error)
+		pr_err("cpu hp setup state failed for RISCV timer [%d]\n",
+		       error);
 
 	return error;
 }
