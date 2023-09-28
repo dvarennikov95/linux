@@ -9,7 +9,7 @@
 #include <linux/types.h>
 #include <asm/csr.h>
 
-#define IMSIC_MMIO_PAGE_SHIFT		12
+#define IMSIC_MMIO_PAGE_SHIFT		14
 #define IMSIC_MMIO_PAGE_SZ		(1UL << IMSIC_MMIO_PAGE_SHIFT)
 #define IMSIC_MMIO_PAGE_LE		0x00
 #define IMSIC_MMIO_PAGE_BE		0x04

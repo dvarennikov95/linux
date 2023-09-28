@@ -158,11 +158,6 @@ static void imsic_handle_irq(struct irq_desc *desc)
 	while ((hwirq = csr_swap(CSR_TOPEI, 0))) {
 		hwirq = hwirq >> TOPEI_ID_SHIFT;
 
-		void __iomem *regs = ioremap(SCU_IRQA_REG(SCU_IRQA_SW_TRG, 0, 0), 4);
-		writel(0, regs);
-		regs = ioremap(SCU_IRQA_REG(SCU_IRQA_STATUS, 0, 0), 4);
-    	writel(0xFFFFFFFF, regs);
-
 		if (hwirq == imsic->ipi_id) {
 #ifdef CONFIG_SMP
 			ipi_mux_process();
@@ -173,6 +168,11 @@ static void imsic_handle_irq(struct irq_desc *desc)
 		if (unlikely(!imsic->base_domain))
 			continue;
 
+		void __iomem *regs = ioremap(SCU_IRQA_REG(SCU_IRQA_SW_TRG, 0, 0), 4);
+		writel(0, regs);
+		regs = ioremap(SCU_IRQA_REG(SCU_IRQA_STATUS, 0, 0), 4);
+    	writel(0xFFFFFFFF, regs);
+	
 		err = generic_handle_domain_irq(imsic->base_domain, hwirq);
 		if (unlikely(err))
 			pr_warn_ratelimited(
