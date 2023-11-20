@@ -407,6 +407,12 @@ config RPMSG_TTY
 
 	  To compile this driver as a module, choose M here: the module will be
 	  called rpmsg_tty.
+	  
+config NS_URING_TTY
+	tristate "nextsilicon tty driver"
+	default y
+	help
+	  nextsilicon tty driver
 
 endif # TTY
 
