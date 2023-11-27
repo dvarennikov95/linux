@@ -106,6 +106,8 @@
 #include <asm/sections.h>
 #include <asm/cacheflush.h>
 
+#include <linux/namei.h>
+
 #define CREATE_TRACE_POINTS
 #include <trace/events/initcall.h>
 
@@ -1503,10 +1505,64 @@ static int __ref kernel_init(void *unused)
 /* Open /dev/console, for stdin/stdout/stderr, this should never fail */
 void __init console_on_rootfs(void)
 {
+	struct path path;
+	kern_path("/dev/console", 0, &path);
+	pr_notice("DENTRY: %s, parent: %s,mnt root: %s\n", path.dentry->d_iname, path.dentry->d_parent->d_iname,path.mnt->mnt_root->d_iname);
+
+	// struct file *file1 = filp_open("/dev/check", O_CREAT, 0);
+	// if (IS_ERR(file1)) 
+	// {
+	// 	pr_notice("Unable to create file in dev\n");
+	// }
+	// else
+	// {
+	// 	pr_notice("Created /dev/check, reading from it...\n");
+	// 	filp_close(file1, NULL);
+	// 	file1 = filp_open("/dev/check", O_RDWR, 0);
+	// 	if (IS_ERR(file1))
+	// 	{
+	// 		pr_notice("Unable to open /dev/check for reading and writing\n");
+	// 		filp_close(file1, NULL);
+	// 	}
+	// 	else
+	// 	{
+	// 		pr_notice("Succesfully opened /dev/check for reading and writing\n");
+	// 		filp_close(file1, NULL);
+	// 	}
+	// }
+	// struct file *file2 = filp_open("/dev/null", O_RDWR, 0);
+	// if (IS_ERR(file2)) {
+	// 	pr_notice("Warning: unable to open /dev/null: %d\n", PTR_ERR(file2));
+	// }
+
+	// struct file *file3 = filp_open("/dev/random", O_RDWR, 0);
+	// if (IS_ERR(file3)) {
+	// 	pr_notice("Warning: unable to open /dev/random: %d\n", PTR_ERR(file3));
+	// }
+
+	// struct file *file4 = filp_open("/bin/sh", O_RDWR, 0);
+	// if (IS_ERR(file4)) {
+	// 	pr_notice("Warning: unable to open /bin/cat: %d\n", PTR_ERR(file4));
+	// }
+	// else
+	// {
+	// 	filp_close(file4, NULL);
+	// }
+
+	// struct file *file5 = filp_open("/dev/tty0", O_RDWR, 0);
+	// if (IS_ERR(file5)) {
+	// 	pr_notice("Warning: unable to open /dev/tty0: %d\n", PTR_ERR(file5));
+	// }
+
+	// struct file *file6 = filp_open("/dev/tty", O_RDWR, 0);
+	// if (IS_ERR(file6)) {
+	// 	pr_notice("Warning: unable to open /dev/tty: %d\n", PTR_ERR(file6));
+	// }
+
 	struct file *file = filp_open("/dev/console", O_RDWR, 0);
 
 	if (IS_ERR(file)) {
-		pr_err("Warning: unable to open an initial console.\n");
+		pr_notice("Warning: unable to open an initial console: %d\n", PTR_ERR(file));
 		return;
 	}
 	init_dup(file);

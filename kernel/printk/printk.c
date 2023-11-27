@@ -3356,6 +3356,8 @@ void register_console(struct console *newcon)
 	bool bootcon_registered = false;
 	bool realcon_registered = false;
 	int err;
+	pr_info("[LEON] Registering console: %s%d\n", newcon->name, newcon->index);
+	pr_info("[LEON] Console flags: %d\n", newcon->flags);
 
 	console_list_lock();
 
@@ -3406,7 +3408,10 @@ void register_console(struct console *newcon)
 
 	/* printk() messages are not printed to the Braille console. */
 	if (err || newcon->flags & CON_BRL)
+	{
+		pr_info("Err: %d\n", err);
 		goto unlock;
+	}
 
 	/*
 	 * If we have a bootconsole, and are switching to a real console,
@@ -3455,6 +3460,7 @@ void register_console(struct console *newcon)
 	 * users know there might be something in the kernel's log buffer that
 	 * went to the bootconsole (that they do not see on the real console)
 	 */
+	pr_info("[LEON] Registered console!\n");
 	con_printk(KERN_INFO, newcon, "enabled\n");
 	if (bootcon_registered &&
 	    ((newcon->flags & (CON_CONSDEV | CON_BOOT)) == CON_CONSDEV) &&
@@ -3478,6 +3484,7 @@ static int unregister_console_locked(struct console *console)
 
 	lockdep_assert_console_list_lock_held();
 
+	pr_info("[LEON] Unregistering console: %s%d\n", console->name, console->index);
 	con_printk(KERN_INFO, console, "disabled\n");
 
 	res = _braille_unregister_console(console);

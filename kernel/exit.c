@@ -998,6 +998,7 @@ SYSCALL_DEFINE1(exit, int, error_code)
 void __noreturn
 do_group_exit(int exit_code)
 {
+	pr_notice("Inside do_group_exit %d\n", exit_code);
 	struct signal_struct *sig = current->signal;
 
 	if (sig->flags & SIGNAL_GROUP_EXIT)

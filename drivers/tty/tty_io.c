@@ -3627,11 +3627,14 @@ static struct ctl_table tty_table[] = {
  */
 int __init tty_init(void)
 {
+	pr_notice("*********tty_init********\n");
 	register_sysctl_init("dev/tty", tty_table);
 	cdev_init(&tty_cdev, &tty_fops);
 	if (cdev_add(&tty_cdev, MKDEV(TTYAUX_MAJOR, 0), 1) ||
 	    register_chrdev_region(MKDEV(TTYAUX_MAJOR, 0), 1, "/dev/tty") < 0)
 		panic("Couldn't register /dev/tty driver\n");
+	else
+		pr_notice("Registered /dev/console driver\n");
 	device_create(&tty_class, NULL, MKDEV(TTYAUX_MAJOR, 0), NULL, "tty");
 
 	cdev_init(&console_cdev, &console_fops);
@@ -3642,8 +3645,10 @@ int __init tty_init(void)
 					    MKDEV(TTYAUX_MAJOR, 1), NULL,
 					    cons_dev_groups, "console");
 	if (IS_ERR(consdev))
+	{
+		pr_notice("*********consdev err********\n");
 		consdev = NULL;
-
+	}
 #ifdef CONFIG_VT
 	vty_init(&console_fops);
 #endif

@@ -3327,6 +3327,7 @@ static void serial8250_console_putchar(struct uart_port *port, unsigned char ch)
  */
 static void serial8250_console_restore(struct uart_8250_port *up)
 {
+	pr_notice("********serial8250_console_restore***********\n");
 	struct uart_port *port = &up->port;
 	struct ktermios termios;
 	unsigned int baud, quot, frac = 0;
@@ -3490,12 +3491,13 @@ static unsigned int probe_baud(struct uart_port *port)
 
 int serial8250_console_setup(struct uart_port *port, char *options, bool probe)
 {
+	pr_notice("*********serial8250_console_setup************\n");
 	int baud = 9600;
 	int bits = 8;
 	int parity = 'n';
 	int flow = 'n';
 	int ret;
-
+	pr_notice("name: %s iobase: %d membase: %d\n", port->name, port->iobase, port->membase);
 	if (!port->iobase && !port->membase)
 		return -ENODEV;
 

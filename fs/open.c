@@ -1367,6 +1367,7 @@ struct file *filp_open(const char *filename, int flags, umode_t mode)
 {
 	struct filename *name = getname_kernel(filename);
 	struct file *file = ERR_CAST(name);
+	pr_notice("Openning: %s\n", name->name);
 	
 	if (!IS_ERR(name)) {
 		file = file_open_name(name, flags, mode);

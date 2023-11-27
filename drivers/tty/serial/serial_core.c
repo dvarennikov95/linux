@@ -2553,6 +2553,7 @@ static void
 uart_configure_port(struct uart_driver *drv, struct uart_state *state,
 		    struct uart_port *port)
 {
+	pr_notice("************uart_configure_port**********\n");
 	unsigned int flags;
 
 	/*
@@ -2756,6 +2757,7 @@ static const struct tty_port_operations uart_port_ops = {
  */
 int uart_register_driver(struct uart_driver *drv)
 {
+	pr_notice("*********uart_register_driver*********\n");
 	struct tty_driver *normal;
 	int i, retval = -ENOMEM;
 
