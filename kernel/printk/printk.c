@@ -3207,6 +3207,7 @@ static int try_enable_preferred_console(struct console *newcon,
 	for (i = 0, c = console_cmdline;
 	     i < MAX_CMDLINECONSOLES && c->name[0];
 	     i++, c++) {
+		pr_info("alex: Registering console: newcon(%s)(%d) cmd(%s)(%d)\n", newcon->name, newcon->index, c->name, c->index);
 		if (c->user_specified != user_specified)
 			continue;
 		if (!newcon->match ||
@@ -3230,7 +3231,10 @@ static int try_enable_preferred_console(struct console *newcon,
 		}
 		newcon->flags |= CON_ENABLED;
 		if (i == preferred_console)
+		{
 			newcon->flags |= CON_CONSDEV;
+			pr_info("alex: preferred_console: newcon(%s)\n", newcon->name);
+		}
 		return 0;
 	}
 
@@ -3288,6 +3292,7 @@ static void console_init_seq(struct console *newcon, bool bootcon_registered)
 		 * the furthest behind.
 		 */
 		if (bootcon_registered && !keep_bootcon) {
+		// if (bootcon_registered) {
 			/*
 			 * Hold the console_lock to stop console printing and
 			 * guarantee safe access to console->seq.
@@ -3356,8 +3361,8 @@ void register_console(struct console *newcon)
 	bool bootcon_registered = false;
 	bool realcon_registered = false;
 	int err;
-	pr_info("[LEON] Registering console: %s%d\n", newcon->name, newcon->index);
-	pr_info("[LEON] Console flags: %d\n", newcon->flags);
+	pr_info("[LEON] Registering console: %s index %d\n", newcon->name, newcon->index);
+	pr_info("[LEON] Console flags: %d keep_bootcon %d \n", newcon->flags, keep_bootcon);
 
 	console_list_lock();
 
@@ -3367,10 +3372,13 @@ void register_console(struct console *newcon)
 			goto unlock;
 		}
 
-		if (con->flags & CON_BOOT)
+		if (con->flags & CON_BOOT) {
 			bootcon_registered = true;
-		else
+			pr_info("alex: bootcon_registered (%s)\n", con->name);
+		}else{
 			realcon_registered = true;
+			pr_info("alex: realcon_registered (%s)\n", con->name);
+		}
 	}
 
 	/* Do not register boot consoles when there already is a real one. */
@@ -3398,14 +3406,15 @@ void register_console(struct console *newcon)
 			try_enable_default_console(newcon);
 		}
 	}
-
+	// pr_info("[alex] here0 first console (%s) flags (%d)\n", console_first()->name, console_first()->flags);
 	/* See if this console matches one we selected on the command line */
 	err = try_enable_preferred_console(newcon, true);
-
+	pr_info("[alex] here1 err (%d) new console (%s) \n", err, newcon->name);
 	/* If not, try to match against the platform default(s) */
 	if (err == -ENOENT)
 		err = try_enable_preferred_console(newcon, false);
 
+	pr_info("[alex] here2 err (%d)\n", err);
 	/* printk() messages are not printed to the Braille console. */
 	if (err || newcon->flags & CON_BRL)
 	{
@@ -3423,10 +3432,12 @@ void register_console(struct console *newcon)
 	    ((newcon->flags & (CON_CONSDEV | CON_BOOT)) == CON_CONSDEV)) {
 		newcon->flags &= ~CON_PRINTBUFFER;
 	}
+	pr_info("[alex] here3 flags (0x%x) bootcon_registered (%d)\n", newcon->flags, bootcon_registered);
 
 	newcon->dropped = 0;
 	console_init_seq(newcon, bootcon_registered);
 
+	pr_info("[alex] here4 flags (0x%x)\n", newcon->flags);
 	/*
 	 * Put this console in the list - keep the
 	 * preferred driver at the head of the list.
@@ -3435,14 +3446,18 @@ void register_console(struct console *newcon)
 		/* Ensure CON_CONSDEV is always set for the head. */
 		newcon->flags |= CON_CONSDEV;
 		hlist_add_head_rcu(&newcon->node, &console_list);
+		pr_info("[alex] here5 flags (0x%x)\n", newcon->flags);
 
 	} else if (newcon->flags & CON_CONSDEV) {
 		/* Only the new head can have CON_CONSDEV set. */
 		console_srcu_write_flags(console_first(), console_first()->flags & ~CON_CONSDEV);
+		// pr_info("[alex] here5.5 con (%s) flags (0x%x)\n", console_first()->name, console_first()->flags);
 		hlist_add_head_rcu(&newcon->node, &console_list);
+		pr_info("[alex] here6 flags (0x%x)\n", newcon->flags);
 
 	} else {
 		hlist_add_behind_rcu(&newcon->node, console_list.first);
+		pr_info("[alex] here7 flags (0x%x)\n", newcon->flags);
 	}
 
 	/*
@@ -3452,6 +3467,8 @@ void register_console(struct console *newcon)
 	 */
 
 	console_sysfs_notify();
+
+	pr_info("[alex] here8 flags (0x%x)\n", newcon->flags);
 
 	/*
 	 * By unregistering the bootconsoles after we enable the real console
@@ -3468,8 +3485,10 @@ void register_console(struct console *newcon)
 		struct hlist_node *tmp;
 
 		hlist_for_each_entry_safe(con, tmp, &console_list, node) {
-			if (con->flags & CON_BOOT)
+			if (con->flags & CON_BOOT) {
 				unregister_console_locked(con);
+				pr_info("alex: upregistering old bootcon (%s)\n", con->name);
+			}
 		}
 	}
 unlock:

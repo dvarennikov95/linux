@@ -1716,6 +1716,7 @@ static void uart_close(struct tty_struct *tty, struct file *filp)
 		spin_unlock_irq(&port->lock);
 		return;
 	}
+	pr_notice("************alex: uart_close name (%s)**********\n", tty->name);
 
 	pr_debug("uart_close(%d) called\n", tty->index);
 
@@ -1924,6 +1925,7 @@ static int uart_install(struct tty_driver *driver, struct tty_struct *tty)
 	struct uart_state *state = drv->state + tty->index;
 
 	tty->driver_data = state;
+	pr_notice("************alex: uart_install name (%s)**********\n", tty->name);
 
 	return tty_standard_install(driver, tty);
 }
@@ -1943,6 +1945,7 @@ static int uart_open(struct tty_struct *tty, struct file *filp)
 	struct uart_state *state = tty->driver_data;
 	int retval;
 
+	pr_notice("************alex: uart_open name (%s)**********\n", tty->name);
 	retval = tty_port_open(&state->port, tty, filp);
 	if (retval > 0)
 		retval = 0;
@@ -2630,6 +2633,7 @@ static int uart_poll_init(struct tty_driver *driver, int line, char *options)
 	int flow = 'n';
 	int ret = 0;
 
+	pr_notice("************alex: uart_poll_init name (%s) **********\n", tty->name);
 	tport = &state->port;
 	mutex_lock(&tport->mutex);
 

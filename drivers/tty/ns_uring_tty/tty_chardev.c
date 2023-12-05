@@ -160,14 +160,14 @@ int ns_uring_channel_init(int core_chan_idx)
     // upstream_address = tty_pci_get_address(GET_UPSTREAM_RING_BASE(core_chan_idx), GET_UPSTREAM_DWIN_INDEX(core_chan_idx));
     // downstream_address = tty_pci_get_address(GET_DOWNSTREAM_RING_BASE(core_chan_idx), GET_DOWNSTREAM_DWIN_INDEX(core_chan_idx));
 #if (NS_URING_CHAN_INIT_IS_DOWNSTREAM == 1)
-    upstream_address = 0; /* todo Alex */
-    downstream_address = downstream_address + RING_SIZE;
+    downstream_address = 0; /* todo Alex */
+    upstream_address = downstream_address + RING_SIZE;
     ns_uring_ch = ns_uring_create_channel_downstream( NULL,    // channel will be allocated dynamically
                                                       (void *)upstream_address,
                                                       (void *)downstream_address);
 #else //IS_UPSTREAM
-    upstream_address = get_ring_vaddress(get_channel_paddress(PCORE, 0));
-    downstream_address = get_ring_vaddress(get_channel_paddress(PCORE, 0) + RING_SIZE);
+    downstream_address = get_ring_vaddress(get_channel_paddress(PCORE, 0));
+    upstream_address = get_ring_vaddress(get_channel_paddress(PCORE, 0) + RING_SIZE);
     ns_uring_ch = ns_uring_create_channel_upstream( NULL,     // channel will be allocated dynamically
                                                     (void*)upstream_address, 
                                                     (void*)downstream_address, 

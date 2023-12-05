@@ -39,6 +39,8 @@ static struct tty_driver *tty_driver;
 struct tty_port tty_ports[MAX_TTY_DEVICES];
 unsigned long ring_base_addr = DEFAULT_NS_URING_BASE_ADDRESS;
 
+int cnt2 = 0, cnt = 0, initialized = 0;
+
 static char *tty_get_port_name_from_id(int port_id)
 {
     char *port_name;
@@ -127,6 +129,7 @@ static int serial_device_tty_open(struct tty_struct *tty, struct file *file)
     {
         printk("serial_device_tty_open: initialize serial port (%s)\n", tty->name);
         tty_port_set_initialized(port, true);
+        initialized = 1;
     }
             
     if (tty->count > 1)
@@ -172,18 +175,19 @@ static int serial_device_tty_open(struct tty_struct *tty, struct file *file)
 
 
 
-static int tx_send_test(const char ch)
+static int tx_send_test(const unsigned char ch)
 {
     uint32_t msg[4];
     int result = 0;
     struct ns_uring_ctx *ctx = &ns_uring_channel_ctx[0];
     struct ns_uring *send_ring;
     uint32_t msg_data = 0;
+    // uint8_t pid = ns_uring_get_pid(ctx->pch);
     
     /* copy message data from tty device */
     // memcpy((void*)&msg_data, (void *)ch, 1); 
 
-    send_ring = ctx->pch->at_upstream ? ctx->pch->upstream : ctx->pch->downstream;
+    // debug_print(KERN_DEBUG "console: tx_send_test: data = 0x%c length = %d upstream_id (pid) = %d \n", ch, pid);
 
     msg[0] = NS_URING_ENTRY_TYPE_SINGLE_CHARACTER;
     msg[1] = 0;
@@ -211,40 +215,32 @@ static int tx_send_test(const char ch)
  */
 static int serial_device_tty_write(struct tty_struct *tty, const unsigned char *data, int length)
 {
-    uint32_t msg[4];
-    int core_chan_idx = 0;
     int result = 0;
     struct ns_uring_ctx *ctx = &ns_uring_channel_ctx[tty->index];
-    struct ns_uring *send_ring;
-    uint32_t msg_data = 0;
+    int count = length;
 
-    core_chan_idx = tty->index;
     
-    if(core_chan_idx >= MAX_TTY_DEVICES)
+    if(tty->index >= MAX_TTY_DEVICES)
     {
-        printk("TTY device WRITE: invalid pid = %d \n", core_chan_idx);
+        printk("TTY device WRITE: invalid tty id = %d \n", tty->index);
         return -1;
     }
 
-    if (length > DEFAULT_DATA_SIZE)
+    if (!initialized)
     {
-        printk("TTY device WRITE: invalid data lenth = %d \n", length);
+        printk("TTY device WRITE: device not initialized \n");
         return -1;
     }
-    
-    // copy message data from tty device 
-    memcpy((void*)&msg_data, (void *)data, length); 
 
-    debug_print(KERN_DEBUG "TTY device WRITE: data = 0x%x length = %d core_chan_idx (pid) = %d \n", msg_data, length, core_chan_idx);
-
-    send_ring = ctx->pch->at_upstream ? ctx->pch->upstream : ctx->pch->downstream;
-
-    msg[0] = NS_URING_ENTRY_TYPE_SINGLE_CHARACTER;
-    msg[1] = 0;
-    msg[2] = 0;
-    msg[3] = msg_data;
-
-    result = ns_uring_send(ctx->pch, (void *)&msg, sizeof(msg));
+    while (count--)
+    {
+        result = tx_send_test(*data);
+        if ((cnt2 == 0) || (*data == '%')) {
+            debug_print(KERN_DEBUG "serial_device_tty_write: data (%c) length (%d)\n", *data, count);
+            cnt2++;
+        }
+        data++;
+    }
 
     if(result != 0)
     {
@@ -325,7 +321,7 @@ static unsigned int serial_device_tty_write_room(struct tty_struct *tty)
  */
 static int serial_device_tty_ioctl(struct tty_struct *tty, unsigned int cmd, unsigned long arg)
 {
-    debug_print(KERN_DEBUG "tty_ioctl: arg = 0x%lx cmd = 0x%x\n", arg, cmd);
+    // debug_print(KERN_DEBUG "tty_ioctl: arg = 0x%lx cmd = 0x%x\n", arg, cmd);
 
     return 0;
 }
@@ -410,35 +406,28 @@ static void tty_devices_remove(void)
  *
  *	The console must be locked when we get here.
  */
-int cnt = 0;
 static void serial_console_write(struct console *co, const char *s,
 				 unsigned count)
 {
-	// struct tty_struct *tty = tty_driver->ttys[0];
-    
-    if (cnt == 100)
-    {
-        debug_print(KERN_DEBUG "ns_uring tty driver not up yet!\n");
-        cnt=0;
+    if (cnt == 0) {
+        debug_print(KERN_DEBUG "serial_console_write: ns_uring tty driver not up yet!\n");
+        cnt++;
     }
 
-    if(co->device(co, NULL) == NULL)
+    if (!initialized)
     {
-        cnt++;
         return;
     }
-        
-    while (count--) {
-        tx_send_test(*s++);
 
-	    // if (*s == '\n') {
-		//     // tty->ops->poll_put_char(tty_driver, 0, *s);
-        //     tx_send_test(s);
-	    // }
-	    // s++;
+    while (count--) 
+    {
+        tx_send_test((unsigned char)*s);
+        if ((cnt == 1) || (*s == '%')) {
+            debug_print(KERN_DEBUG "serial_console_write: data (%c) length (%d)\n", *s, count);
+            cnt++;
+        }
+        s++;
 	}
-
-	// uart_console_write() // TODO: check if need to work with uart instead of tty device
 }
 
 static struct tty_driver *serial_console_device(struct console *c, int *index)
@@ -480,6 +469,8 @@ static int __init tty_driver_init(void)
 
     // tty_driver = alloc_tty_driver(MAX_TTY_DEVICES); 
     tty_driver = tty_alloc_driver(MAX_TTY_DEVICES, TTY_DRIVER_REAL_RAW | TTY_DRIVER_DYNAMIC_DEV);
+
+    debug_print(KERN_DEBUG "tty_driver_init, driver allocated\n");
     
     if (!tty_driver)
     { 
