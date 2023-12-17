@@ -2633,7 +2633,7 @@ static int uart_poll_init(struct tty_driver *driver, int line, char *options)
 	int flow = 'n';
 	int ret = 0;
 
-	pr_notice("************alex: uart_poll_init name (%s) **********\n", tty->name);
+	pr_notice("************alex: uart_poll_init name (%s) **********\n", driver->name);
 	tport = &state->port;
 	mutex_lock(&tport->mutex);
 

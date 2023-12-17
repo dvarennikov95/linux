@@ -11,6 +11,7 @@
 #include <linux/serial_core.h>
 #include <linux/tty_flip.h>
 #include <linux/console.h>
+#include <linux/delay.h>
 
 #include "tty_utils.h"
 #include "tty_chardev.h"
@@ -31,6 +32,8 @@ MODULE_DEVICE_TABLE(of, ns_uring_tty_of_match);
 
 #define DEFAULT_NS_URING_BASE_ADDRESS      (0x8DFFE0000000)
 
+char pcore_tcomm[64];
+
 // extern bool is_pci_dev_initiated;
 extern struct ns_uring_ctx ns_uring_channel_ctx[MAX_TTY_DEVICES];
 
@@ -39,7 +42,8 @@ static struct tty_driver *tty_driver;
 struct tty_port tty_ports[MAX_TTY_DEVICES];
 unsigned long ring_base_addr = DEFAULT_NS_URING_BASE_ADDRESS;
 
-int cnt2 = 0, cnt = 0, initialized = 0;
+int cnt = 0, initialized = 0, print = 0;
+int close_tty_write = 1, close_console_write = 1;
 
 static char *tty_get_port_name_from_id(int port_id)
 {
@@ -123,7 +127,7 @@ static int serial_device_tty_open(struct tty_struct *tty, struct file *file)
 	struct tty_port *port = tty->driver->ports[tty->index];
     struct ns_uring_ctx *ctx = &ns_uring_channel_ctx[tty->index];
 
-    printk("serial_device_tty_open: serial port (%s) id(%d) flags(%d)\n", tty->name, tty->index, port->flags);
+    printk("serial_device_tty_open: serial port (%s) id(%d) flags(%ld)\n", tty->name, tty->index, port->flags);
 
     if (!tty_port_initialized(port))
     {
@@ -156,13 +160,22 @@ static int serial_device_tty_open(struct tty_struct *tty, struct file *file)
         }
     }
     
-    if (!tty_port_core_mem_access_check(tty->index, (unsigned long*)ctx->pch->downstream))
+    // if (!tty_port_core_mem_access_check(tty->index, (unsigned long*)ctx->pch->downstream))
+    // {
+    //     printk("serial_device_tty_open: no access to port target core memory !\n");
+    //     err = -ENODEV;
+    //     goto closeport;
+    // }
+
+    // Create a tty driver main thread //todo move back to tty_init
+    debug_print(KERN_DEBUG "tty_driver_init: run main thread\n");
+    main_thread = kthread_run(ns_uring_process_main, NULL, "main_thread");
+
+    if (IS_ERR(main_thread)) 
     {
-        printk("serial_device_tty_open: no access to port target core memory !\n");
-        err = -ENODEV;
+        printk(KERN_ERR "Failed to create main thread\n");
         goto closeport;
     }
-
 
     return 0;
 
@@ -207,12 +220,13 @@ static int tx_send_test(const unsigned char ch)
 /**
  * @brief write to the tty device
  * 
- * @param tty  a pointer to the tty srtruct
+ * @param tty  a pointer to the tty struct
  * @param data  a pointer to the data we want to write
  * @param length  the length of the data
  * 
  * @return length value in case it's ok
  */
+int cnt2 = 0;
 static int serial_device_tty_write(struct tty_struct *tty, const unsigned char *data, int length)
 {
     int result = 0;
@@ -231,31 +245,46 @@ static int serial_device_tty_write(struct tty_struct *tty, const unsigned char *
         printk("TTY device WRITE: device not initialized \n");
         return -1;
     }
-
-    while (count--)
+    
+    if (close_tty_write)
     {
-        result = tx_send_test(*data);
-        if ((cnt2 == 0) || (*data == '%')) {
+        if ((print) || (!cnt2)) {
             debug_print(KERN_DEBUG "serial_device_tty_write: data (%c) length (%d)\n", *data, count);
-            cnt2++;
+            cnt2 = 1;
+            print = 0;
         }
-        data++;
-    }
 
-    if(result != 0)
-    {
-        debug_print(KERN_DEBUG "TTY device WRITE: ERROR: result = %d\n", result);
-        return -1;
+        while (count)
+        {
+            if (*data == '\n')
+                result = tx_send_test('\r');
+            result = tx_send_test(*data);
+            data++;
+            count--;
+        }
+
+        if(result != 0)
+        {
+            debug_print(KERN_DEBUG "TTY device WRITE: ERROR: result = %d\n", result);
+            return -1;
+        }
     }
 
     return length;
 }
 
 #ifdef CONFIG_CONSOLE_POLL
+
+static int uart_over_mem_poll_init(struct tty_driver *driver, int line, char *options)
+{
+    debug_print(KERN_DEBUG "uart_over_mem_poll_init\n");
+    return 0;
+}
 static int uart_over_mem_poll_get_char(struct tty_driver *driver, int line)
 {
     int status;
     struct ns_uring_ctx *ctx = &ns_uring_channel_ctx[line];
+    debug_print(KERN_DEBUG "uart_over_mem_poll_get_char\n");
 #if (NS_URING_CHAN_INIT_IS_DOWNSTREAM == 1)
 	status = ns_uring_process_downstream(ctx->pch);
 #else // UPSTREAM
@@ -279,6 +308,7 @@ static int uart_over_mem_poll_get_char(struct tty_driver *driver, int line)
 static void uart_over_mem_poll_put_char(struct tty_driver *driver, int line,
 					char ch)
 {
+    debug_print(KERN_DEBUG "uart_over_mem_poll_put_char\n");
     const unsigned char data = (unsigned char)ch; //hack
 	struct tty_struct *tty = driver->ttys[line];
 
@@ -310,21 +340,6 @@ static unsigned int serial_device_tty_write_room(struct tty_struct *tty)
     return tty_buffer_space_avail(tty->port);
 }
 
-/**
- * @brief the ability to perform more actions in the driver
- * 
- * @param tty  a pointer to the tty srtruct
- * @param cmd  the command we want to perform
- * @param arg  additional parameter
- * 
- * @return 0 value in case it's ok
- */
-static int serial_device_tty_ioctl(struct tty_struct *tty, unsigned int cmd, unsigned long arg)
-{
-    // debug_print(KERN_DEBUG "tty_ioctl: arg = 0x%lx cmd = 0x%x\n", arg, cmd);
-
-    return 0;
-}
 
 /**
  * @brief Set the permission of the device
@@ -367,8 +382,9 @@ static const struct tty_operations serial_device_tty_ops = {
 	.close = serial_device_tty_close,
 	.write = serial_device_tty_write,
 	.write_room = serial_device_tty_write_room,
-	.ioctl = serial_device_tty_ioctl,
+	// .ioctl = serial_device_tty_ioctl,
 #ifdef CONFIG_CONSOLE_POLL
+	.poll_init = uart_over_mem_poll_init,
 	.poll_get_char = uart_over_mem_poll_get_char,
 	.poll_put_char = uart_over_mem_poll_put_char,
 #endif
@@ -409,31 +425,38 @@ static void tty_devices_remove(void)
 static void serial_console_write(struct console *co, const char *s,
 				 unsigned count)
 {
-    if (cnt == 0) {
-        debug_print(KERN_DEBUG "serial_console_write: ns_uring tty driver not up yet!\n");
-        cnt++;
-    }
-
-    if (!initialized)
+    if (close_console_write)
     {
-        return;
-    }
+        if (!initialized)
+        {
+            if (cnt == 0)
+            {
+                debug_print(KERN_DEBUG "serial_console_write: ns_uring tty driver not up yet!\n");
+                cnt++;
+            }
+        } else {
 
-    while (count--) 
-    {
-        tx_send_test((unsigned char)*s);
-        if ((cnt == 1) || (*s == '%')) {
-            debug_print(KERN_DEBUG "serial_console_write: data (%c) length (%d)\n", *s, count);
-            cnt++;
+            if ((print) || (cnt == 1)) {
+                debug_print(KERN_DEBUG "serial_console_write: data (%c) length (%d)\n", *s, count);
+                cnt++;
+                print = 0;
+            }
+            while (count--) 
+            {
+                if (*s == '\n')
+                    tx_send_test('\r');
+                tx_send_test((unsigned char)*s);
+                s++;
+            }
         }
-        s++;
-	}
+    }
 }
 
 static struct tty_driver *serial_console_device(struct console *c, int *index)
 {
-    if (index)
+    if (index) {
         *index = 0;
+    }
 	return tty_driver;
 }
 
@@ -532,8 +555,7 @@ static int __init tty_driver_init(void)
         printk(KERN_ERR "Failed to create main thread\n");
         goto teardown;
     }
-#else // UPSTREAM
-    // register_console(&ns_uring_tty_console);
+    printk(KERN_INFO "kthread_create call was successful!\n");
 #endif
     
     return 0; 

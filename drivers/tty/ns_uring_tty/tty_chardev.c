@@ -11,10 +11,11 @@
 #include "tty_chardev.h"
 #include "ns_uring.h"
 
-// #define LOOP_RESP
-
 extern struct tty_port tty_ports[MAX_TTY_DEVICES];
 extern int tty_tx_buffer(struct tty_port *port, unsigned char *data, int length);
+extern int print;
+extern int close_tty_write;
+extern int close_console_write;
 
 
 struct ns_uring_ctx ns_uring_channel_ctx[MAX_TTY_DEVICES] = {};
@@ -28,7 +29,7 @@ unsigned long get_channel_paddress(int type, int coreid)
             chan_base_address = 0x8C4383700000;
             break;
         case SCORE:
-            chan_base_address = 0x8d7fe0100000;
+            chan_base_address = 0x8DFFE0100000;
             break;
         case PCORE:
             chan_base_address = 0x8DFFE0000000;
@@ -75,13 +76,30 @@ int tty_tx_buffer(struct tty_port *port, unsigned char *data, int length)
     int queued, len; 
     unsigned char str[DEFAULT_DATA_SIZE] = {};
 
-    debug_print(KERN_DEBUG "tty_tx_buffer: data = 0x%x data_len = %d \n", *data, length);
+    // debug_print(KERN_DEBUG "tty_tx_buffer: data = 0x%x data_len = %d \n", *data, length);
 
     if (length != DEFAULT_DATA_SIZE)
     {
         printk("tty_tx_buffer: ERROR: data not sent! length (%d) is invalid\n", length);
         return -EINVAL;
     }
+
+
+    if ((*data == '%')) {
+        print = 1;
+    }
+    if ((*data == '1')) {
+        close_console_write = 0;
+    }
+    if ((*data == '2')) {
+        close_tty_write = 0;
+    }
+    if ((*data == '3')) {
+        close_console_write = 1;
+        close_tty_write = 1;
+    }
+
+
 
     snprintf(str, length, "%s", data);
     len = strlen(str);
@@ -101,50 +119,40 @@ int tty_tx_buffer(struct tty_port *port, unsigned char *data, int length)
 
 void ns_uring_recv_cb(void *context, void *msg, unsigned size)
 {
-    struct ns_uring_ctx *ctx = (struct ns_uring_ctx *)context;
-    uint32_t payload_magic_number, type, pid;
-    uint32_t *buf = (uint32_t *)msg;
-    struct ns_uring *recv_ring;
-    int status=0;
+	struct ns_uring_ctx *ctx = (struct ns_uring_ctx *)context;
+	struct ns_uring_entry *entry = (struct ns_uring_entry *)msg;
+	int status = 0;
+    uint8_t upstream_id = ns_uring_get_pid(ctx->pch);
 
-    type = buf[0];
-    pid = buf[1];
-    payload_magic_number = buf[2];
+	if (size != sizeof(struct ns_uring_entry)) {
+		ctx->err = -EINVAL;
+		printk(KERN_DEBUG "ns_uring_recv_cb: ERROR: unexpected entry size (%d) \n",
+		       size);
+		return;
+	}
 
-    debug_print(KERN_DEBUG "ns_uring: received msg of: type (0x%x) pid (%d) magic(0x%x) data (0x%x)\n",
-                                                        type, pid, payload_magic_number, buf[3]);
-    if (status) 
-    {
-        ctx->err = status;
-        debug_print(KERN_DEBUG "ns_uring_recv_cb: ERROR: error != 0\n");
+	if (entry->hdr.subtype != NS_URING_ENTRY_TYPE_SINGLE_CHARACTER) {
+		ctx->err = -EINVAL;
+		printk(KERN_DEBUG
+		       "ns_uring_recv_cb: ERROR: unexpected msg subtype (%d) \n",
+		       entry->hdr.subtype);
+		return;
+	}
+
+    // debug_print(KERN_DEBUG "ns_uring_recv_cb: from upstream_id (%d) data (0x%x)\n", upstream_id, entry->payload.character);
+
+    status = tty_tx_buffer(&tty_ports[ctx->id],
+				      (unsigned char *)&entry->payload.character,
+				      sizeof(entry->payload.character));
+	if (status) {
+		ctx->err = status;
+		printk(KERN_DEBUG "ns_uring_recv_cb: ERROR: (%d)\n", status);
         return;
-    }
+	}
 
-    recv_ring = ctx->pch->at_upstream ? ctx->pch->downstream : ctx->pch->upstream;
-
-    if ((type != recv_ring->type) || (size != recv_ring->entry_size) || (pid != recv_ring->pid)) 
-    {
-        ctx->err = -EINVAL;
-        debug_print(KERN_DEBUG "ns_uring_recv_cb: ERROR: unexpected msg format \n");
-        return;
-    }
-    ////for test ////
-#ifdef LOOP_RESP
-    uint32_t rsp[4] = {0};
-
-    rsp[0] = NS_URING_ENTRY_TYPE_SINGLE_CHARACTER;
-    rsp[1] = 0; 
-    rsp[2] = 0;
-    rsp[3] = buf[3];
-
-    status = ns_uring_send(ctx->pch, (void *)&rsp, sizeof(rsp));
-#endif
-
-
-    status = tty_tx_buffer(&tty_ports[ctx->id], (unsigned char*)&buf[3], sizeof(buf[3]));
-    ctx->err = status;
-    *ctx->p_in_data = (unsigned char)buf[3];
-    ctx->in_data_received = true;
+    // todo remove
+    // *ctx->p_in_data = (unsigned char)entry->payload.character;
+    // ctx->in_data_received = true;
 }
 
 int ns_uring_channel_init(int core_chan_idx)
@@ -152,13 +160,11 @@ int ns_uring_channel_init(int core_chan_idx)
     struct ns_uring_ctx *ctx = &ns_uring_channel_ctx[core_chan_idx];
     struct ns_uring_ch *ns_uring_ch;
     int status;
-    uint8_t __iomem *downstream_address;
-    uint8_t __iomem *upstream_address;
+    uint8_t *downstream_address;
+    uint8_t *upstream_address;
 
     debug_print(KERN_DEBUG "ns_uring_channel_init portid %d\n", core_chan_idx);
 
-    // upstream_address = tty_pci_get_address(GET_UPSTREAM_RING_BASE(core_chan_idx), GET_UPSTREAM_DWIN_INDEX(core_chan_idx));
-    // downstream_address = tty_pci_get_address(GET_DOWNSTREAM_RING_BASE(core_chan_idx), GET_DOWNSTREAM_DWIN_INDEX(core_chan_idx));
 #if (NS_URING_CHAN_INIT_IS_DOWNSTREAM == 1)
     downstream_address = 0; /* todo Alex */
     upstream_address = downstream_address + RING_SIZE;
@@ -183,6 +189,13 @@ int ns_uring_channel_init(int core_chan_idx)
         printk("ns_uring_channel_init: FAILED creating channel\n");
         return -ENODEV;
     }
+
+    debug_print(KERN_DEBUG "ns_uring_create_channel_upstream: ring_size = %d ,entry_size = %d, chan_type = %d, upstream_id (pid) = %d ignore_full = %d\n",
+                ns_uring_get_upstream_ring_size(ns_uring_ch),
+                ns_uring_ch->downstream->entry_size,
+                ns_uring_ch->downstream->type,
+                ns_uring_ch->downstream->pid,
+                ns_uring_ch->downstream->never_full);
     ctx->pch = ns_uring_ch;
     ctx->id = core_chan_idx;
     ctx->err = 0;
@@ -208,6 +221,7 @@ int ns_uring_process_main(void *data)
     int chan_idx, err=0;
     struct ns_uring_ctx *ctx;
 
+    debug_print(KERN_DEBUG "ns_uring_process_main: Start\n");
     while (!kthread_should_stop())
     {
         for(chan_idx=0 ; chan_idx < MAX_TTY_DEVICES ; chan_idx++)
@@ -215,13 +229,11 @@ int ns_uring_process_main(void *data)
             ctx = &ns_uring_channel_ctx[chan_idx];
             if(ctx->pch)
             {
-                if(ctx->pch->at_upstream)
-                {
-                    err = ns_uring_process_upstream(ctx->pch);
-                } else {
-                    err = ns_uring_process_downstream(ctx->pch);
-                }
-
+#if (NS_URING_CHAN_INIT_IS_DOWNSTREAM == 1)
+                err = ns_uring_process_downstream(ctx->pch);
+#else
+                err = ns_uring_process_upstream(ctx->pch);
+#endif
                 if(err < 0)
                 {
                     printk("ns_uring_process_main:  FAILED processing channel index = %d err = %d, \n", chan_idx, err);
@@ -230,7 +242,8 @@ int ns_uring_process_main(void *data)
                 }
             }
         }
-        usleep_range(10, 20);
+        // usleep_range(10, 20); //// usleep_range_state(min, max, TASK_UNINTERRUPTIBLE);
+        msleep(10); 
     }
 
     debug_print(KERN_DEBUG "ns_uring_process_main: EXIT\n");

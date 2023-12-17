@@ -29,15 +29,13 @@
 
 extern unsigned long ring_base_addr;
 
-#define RING_SIZE           (0x20000)
+#define RING_SIZE           (0x10020)
 #define CHAN_SIZE           (RING_SIZE * 2)
 #define DEFAULT_ENTRY_SIZE	(16)
 #define DEFAULT_DATA_SIZE	(4)
-#define RING_SIZE_PER_ENTRY	((RING_SIZE) / (DEFAULT_ENTRY_SIZE * 2))
+#define RING_SIZE_PER_ENTRY	((RING_SIZE - sizeof(struct ns_uring)) / (DEFAULT_ENTRY_SIZE))
 #define EXPECTED_MSG_TYPE   (0x12)
 
-#define GET_DOWNSTREAM_RING_BASE(chan_idx)  (ring_base_addr + (chan_idx * CHAN_SIZE))
-#define GET_UPSTREAM_RING_BASE(chan_idx) (ring_base_addr + (chan_idx * CHAN_SIZE) + RING_SIZE)
 #ifndef UNUSED_PARAM
 #define UNUSED_PARAM(_x) (void)(_x)
 #endif

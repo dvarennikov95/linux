@@ -410,6 +410,7 @@ config RPMSG_TTY
 	  
 config NS_URING_TTY
 	tristate "nextsilicon tty driver"
+	select CONSOLE_POLL
 	default y
 	help
 	  nextsilicon tty driver
