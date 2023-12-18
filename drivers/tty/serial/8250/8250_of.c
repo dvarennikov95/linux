@@ -32,6 +32,7 @@ static int of_platform_serial_setup(struct platform_device *ofdev,
 			int type, struct uart_8250_port *up,
 			struct of_serial_info *info)
 {
+	pr_notice("***********of_platform_serial_setup**********\n");
 	struct resource resource;
 	struct device_node *np = ofdev->dev.of_node;
 	struct uart_port *port = &up->port;
@@ -198,6 +199,7 @@ err_pmruntime:
  */
 static int of_platform_serial_probe(struct platform_device *ofdev)
 {
+	pr_notice("***********of_platform_serial_probe**********\n");
 	struct of_serial_info *info;
 	struct uart_8250_port port8250;
 	unsigned int port_type;

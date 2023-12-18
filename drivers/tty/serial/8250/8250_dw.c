@@ -352,6 +352,7 @@ dw8250_do_pm(struct uart_port *port, unsigned int state, unsigned int old)
 static void dw8250_set_termios(struct uart_port *p, struct ktermios *termios,
 			       const struct ktermios *old)
 {
+	pr_notice("*************dw8250_set_termios************\n");
 	unsigned long newrate = tty_termios_baud_rate(termios) * 16;
 	struct dw8250_data *d = to_dw8250_data(p->private_data);
 	long rate;
@@ -510,6 +511,7 @@ static void dw8250_reset_control_assert(void *data)
 
 static int dw8250_probe(struct platform_device *pdev)
 {
+	pr_notice("*********dw8250_probe********\n");
 	struct uart_8250_port uart = {}, *up = &uart;
 	struct uart_port *p = &up->port;
 	struct device *dev = &pdev->dev;

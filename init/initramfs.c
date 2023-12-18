@@ -130,6 +130,7 @@ static void __init do_utime(char *filename, time64_t mtime)
 
 static void __init do_utime_path(const struct path *path, time64_t mtime)
 {
+	// pr_notice("PATH: %s\n", path->dentry->d_iname);
 	struct timespec64 t[2] = { { .tv_sec = mtime }, { .tv_sec = mtime } };
 	vfs_utimes(path, t);
 }
@@ -160,6 +161,7 @@ static void __init dir_utime(void)
 	struct dir_entry *de, *tmp;
 	list_for_each_entry_safe(de, tmp, &dir_list, list) {
 		list_del(&de->list);
+		// pr_notice("DIR NAME: %s\n", de->name);
 		do_utime(de->name, de->mtime);
 		kfree(de);
 	}
@@ -369,6 +371,7 @@ static int __init do_name(void)
 			int openflags = O_WRONLY|O_CREAT;
 			if (ml != 1)
 				openflags |= O_TRUNC;
+			pr_notice("Regular file: %s\n", collected);
 			wfile = filp_open(collected, openflags, mode);
 			if (IS_ERR(wfile))
 				return 0;
@@ -382,6 +385,7 @@ static int __init do_name(void)
 			state = CopyFile;
 		}
 	} else if (S_ISDIR(mode)) {
+		pr_notice("Directory: %s\n", collected);
 		init_mkdir(collected, mode);
 		init_chown(collected, uid, gid, 0);
 		init_chmod(collected, mode);
@@ -389,6 +393,8 @@ static int __init do_name(void)
 	} else if (S_ISBLK(mode) || S_ISCHR(mode) ||
 		   S_ISFIFO(mode) || S_ISSOCK(mode)) {
 		if (maybe_link() == 0) {
+
+			pr_notice("BLK/CHAR/FIFO/SOCK: %s\n", collected);
 			init_mknod(collected, mode, rdev);
 			init_chown(collected, uid, gid, 0);
 			init_chmod(collected, mode);

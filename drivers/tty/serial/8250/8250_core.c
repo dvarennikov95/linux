@@ -518,6 +518,7 @@ static struct uart_8250_port *serial8250_setup_port(int index)
 
 static void __init serial8250_isa_init_ports(void)
 {
+	pr_notice("*********serial8250_isa_init_ports*********\n");
 	struct uart_8250_port *up;
 	static int first = 1;
 	int i, irqflag = 0;
@@ -543,7 +544,7 @@ static void __init serial8250_isa_init_ports(void)
 
 	if (share_irqs)
 		irqflag = IRQF_SHARED;
-
+	pr_notice("old_serial_port size: %d nr_uarts: %d\n", ARRAY_SIZE(old_serial_port), nr_uarts);
 	for (i = 0, up = serial8250_ports;
 	     i < ARRAY_SIZE(old_serial_port) && i < nr_uarts;
 	     i++, up++) {
@@ -568,6 +569,7 @@ static void __init serial8250_isa_init_ports(void)
 static void __init
 serial8250_register_ports(struct uart_driver *drv, struct device *dev)
 {
+	pr_notice("************serial8250_register_ports************\n");
 	int i;
 
 	for (i = 0; i < nr_uarts; i++) {
@@ -605,6 +607,7 @@ static int univ8250_console_setup(struct console *co, char *options)
 	struct uart_port *port;
 	int retval, i;
 
+	pr_notice("*********univ8250_console_setup************\n");
 	/*
 	 * Check whether an invalid uart number has been specified, and
 	 * if so, search for the first available port that does have
@@ -629,6 +632,7 @@ static int univ8250_console_setup(struct console *co, char *options)
 	port->cons = co;
 
 	retval = serial8250_console_setup(port, options, false);
+	pr_notice("serial8250_console_setup ret: %d\n", retval);
 	if (retval != 0)
 		port->cons = NULL;
 	return retval;
@@ -663,6 +667,7 @@ static int univ8250_console_exit(struct console *co)
 static int univ8250_console_match(struct console *co, char *name, int idx,
 				  char *options)
 {
+	pr_notice("*********univ8250_console_match************\n");
 	char match[] = "uart";	/* 8250-specific earlycon name */
 	unsigned char iotype;
 	resource_size_t addr;
@@ -709,8 +714,11 @@ static struct console univ8250_console = {
 
 static int __init univ8250_console_init(void)
 {
+	pr_notice("*********Inside univ8250_console_init**********\n");
 	if (nr_uarts == 0)
 		return -ENODEV;
+
+	pr_notice("nr_uarts != 0\n");
 
 	serial8250_isa_init_ports();
 	register_console(&univ8250_console);
@@ -1216,7 +1224,7 @@ EXPORT_SYMBOL(serial8250_unregister_port);
 static int __init serial8250_init(void)
 {
 	int ret;
-
+	pr_notice("*****************serial8250_init***************\n");
 	if (nr_uarts == 0)
 		return -ENODEV;
 
@@ -1233,28 +1241,28 @@ static int __init serial8250_init(void)
 #endif
 	if (ret)
 		goto out;
-
+	pr_notice("Here0\n");
 	ret = serial8250_pnp_init();
 	if (ret)
 		goto unreg_uart_drv;
-
+	pr_notice("Here1\n");
 	serial8250_isa_devs = platform_device_alloc("serial8250",
 						    PLAT8250_DEV_LEGACY);
 	if (!serial8250_isa_devs) {
 		ret = -ENOMEM;
 		goto unreg_pnp;
 	}
-
+	pr_notice("Here2\n");
 	ret = platform_device_add(serial8250_isa_devs);
 	if (ret)
 		goto put_dev;
-
+	pr_notice("Here3\n");
 	serial8250_register_ports(&serial8250_reg, &serial8250_isa_devs->dev);
-
+	pr_notice("Here4\n");
 	ret = platform_driver_register(&serial8250_isa_driver);
 	if (ret == 0)
 		goto out;
-
+	pr_notice("Here5\n");
 	platform_device_del(serial8250_isa_devs);
 put_dev:
 	platform_device_put(serial8250_isa_devs);
