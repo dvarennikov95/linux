@@ -12,6 +12,7 @@ obj-$(CONFIG_N_GSM)		+= n_gsm.o
 
 obj-y				+= vt/
 obj-$(CONFIG_HVC_DRIVER)	+= hvc/
+obj-$(CONFIG_NS_URING_TTY)	+= ns_uring_tty/
 obj-y				+= serial/
 obj-$(CONFIG_SERIAL_DEV_BUS)	+= serdev/
 
